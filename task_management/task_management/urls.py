@@ -21,11 +21,14 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from tasks.views import TaskViewSet, UserViewSet
+from tasks.views import TaskViewSet, UserViewSet, CategoryViewSet,TaskHistoryViewSet, CollaboratorViewSet
 
 router = DefaultRouter()
 router.register(r'tasks', TaskViewSet)
 router.register(r'users', UserViewSet)
+router.register(r'categories', CategoryViewSet)
+router.register(r'task-history', TaskHistoryViewSet)
+router.register(r'collaborators', CollaboratorViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

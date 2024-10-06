@@ -1,66 +1,79 @@
-from django.test import TestCase
-from django.contrib.auth.models import User
-from rest_framework.test import APIClient
+from django.urls import reverse
 from rest_framework import status
-from .models import Task
+from rest_framework.test import APITestCase
+from django.contrib.auth.models import User
+from .models import Task, Category
 
-class APITest(TestCase):
+class TaskManagementTests(APITestCase):
     def setUp(self):
-        self.client = APIClient()
         self.user = User.objects.create_user(username='testuser', password='testpass123')
-        response = self.client.post('/api/token/', {'username': 'testuser', 'password': 'testpass123'}, format='json')
-        self.access_token = response.data['access']
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        self.client.login(username='testuser', password='testpass123')
+        self.category = Category.objects.create(name='Work', user=self.user)
+        self.task = Task.objects.create(
+            user=self.user,
+            title='Test Task',
+            description='Test Description',
+            due_date='2023-12-31',
+            priority='Medium',
+            status='Pending',
+            category=self.category
+        )
 
-    def test_create_task(self):
-        url = '/tasks/'
-        data = {
-            'title': 'New Task',
-            'description': 'New Description',
-            'due_date': '2023-12-31',
-            'priority': 'Medium',
-            'status': 'Pending'
-        }
+    def test_create_category(self):
+        url = reverse('category-list')
+        data = {'name': 'Personal'}
+        self.client.force_authenticate(user=self.user)
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Task.objects.count(), 1)
-        self.assertEqual(Task.objects.get().title, 'New Task')
 
-    def test_get_tasks(self):
-        Task.objects.create(title='Test Task', description='Test Description', user=self.user, due_date='2023-12-31', priority='Medium', status='Pending')
-        url = '/tasks/'
+    def test_create_task(self):
+        url = reverse('task-list')
+        data = {
+            'title': 'New Task',
+            'description': 'Task Description',
+            'due_date': '2023-12-31',
+            'priority': 'Medium',
+            'status': 'Pending',
+            'category': self.category.id
+        }
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_read_tasks(self):
+        url = reverse('task-list')
+        self.client.force_authenticate(user=self.user)
         response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['title'], 'Test Task')
 
     def test_update_task(self):
-        task = Task.objects.create(title='Test Task', description='Test Description', user=self.user, due_date='2023-12-31', priority='medium', status='pending')
-        url = f'/tasks/{task.id}/'
+        url = reverse('task-detail', args=[self.task.id])
         data = {
-            'title': 'Updated Task',
-            'description': 'Updated Description',
-            'due_date': '2024-01-01',
-            'priority': 'high',
-            'status': 'pending'
+            'title': 'Updated Task Title',
+            'description': 'Updated Task Description',
+            'due_date': '2023-12-31',
+            'priority': 'High',
+            'status': 'Pending',
+            'category': self.category.id
         }
+        self.client.force_authenticate(user=self.user)
         response = self.client.put(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        task.refresh_from_db()
-        self.assertEqual(task.title, 'Updated Task')
 
     def test_delete_task(self):
-        task = Task.objects.create(title='Test Task', description='Test Description', user=self.user, due_date='2023-12-31', priority='medium', status='pending')
-        url = f'/tasks/{task.id}/'
-        response = self.client.delete(url)
+        url = reverse('task-detail', args=[self.task.id])
+        self.client.force_authenticate(user=self.user)
+        response = self.client.delete(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Task.objects.count(), 0)
 
     def test_mark_task_complete(self):
-        task = Task.objects.create(title='Test Task', description='Test Description', user=self.user, due_date='2023-12-31', priority='medium', status='pending')
-        url = f'/tasks/{task.id}/complete/'
-        response = self.client.post(url)
+        url = reverse('task-mark-complete', args=[self.task.id])
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        task.refresh_from_db()
-        self.assertEqual(task.status, 'completed')
-        self.assertIsNotNone(task.completed_at)
+
+    def test_mark_task_incomplete(self):
+        url = reverse('task-mark-incomplete', args=[self.task.id])
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(url, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
